@@ -238,7 +238,7 @@ class MainWindow(QMainWindow):
         self.extract_extras.setVisible(extract)
         self.workspaces.setVisible(not extract)
         self.workspaces.setCurrentIndex(0 if workspace == "compress" else 1)
-        self._left_layout.setStretchFactor(self.source, 1 if extract else 0)
+        self._left_layout.setStretchFactor(self.extract_extras, 1 if extract else 0)
         self.detail_tab_row.setVisible(workspace == "compress")
         self.outputs.setCurrentIndex(index)
         self.side.set_workspace(workspace)

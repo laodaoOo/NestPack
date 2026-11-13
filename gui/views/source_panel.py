@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidgetItem,
-    QSizePolicy,
     QWidget,
 )
 from qfluentwidgets import FluentIcon, ListWidget, PushButton, ToolButton
@@ -28,8 +27,8 @@ from gui.views.widgets import (
     SectionCard,
 )
 
-# 解除列表固定高度时使用的上限（Qt 的 QWIDGETSIZE_MAX）。
-UNLIMITED_HEIGHT = 16777215
+# 解压页的拖放区高度：比三行更高，便于拖入 1 级目录。
+EXPANDED_LIST_HEIGHT = 340
 
 
 class SourceDropList(ListWidget):
@@ -128,12 +127,9 @@ class SourcePanel(SectionCard):
         )
 
     def _fit_list_height(self) -> None:
-        """压缩页固定为至少三行；解压页只保证下限，由布局拉高。"""
-        height = self._list_height()
-        if self._expanding:
-            self.source_list.setMinimumHeight(height)
-            return
-        self.source_list.setFixedHeight(height)
+        """解压页给拖放区固定大高度，其余页面保持三行。"""
+        height = EXPANDED_LIST_HEIGHT if self._expanding else 0
+        self.source_list.setFixedHeight(max(height, self._list_height()))
         self.source_list.viewport().update()
 
     def _list_height(self) -> int:
@@ -144,15 +140,8 @@ class SourcePanel(SectionCard):
         return 3 * (row_height + 2 * self.source_list.spacing()) + 12
 
     def set_list_expanding(self, expanding: bool) -> None:
-        """解压页把拖放区铺满可用高度，其余页面保持三行。"""
+        """解压页把拖放区放大，其余页面保持三行。"""
         self._expanding = expanding
-        policy = self.source_list.sizePolicy()
-        policy.setVerticalPolicy(
-            QSizePolicy.Policy.Expanding if expanding else QSizePolicy.Policy.Fixed
-        )
-        self.source_list.setSizePolicy(policy)
-        if expanding:
-            self.source_list.setMaximumHeight(UNLIMITED_HEIGHT)
         self._fit_list_height()
 
     def _build_buttons(self) -> None:
