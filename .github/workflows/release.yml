@@ -1,0 +1,75 @@
+name: Release 1.1.0
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '发布标签（如 v1.1.1）；留空只构建，不发布'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.10"
+      - name: Install GUI and build dependencies
+        run: python -m pip install -r requirements.txt "PySide6==6.11.2" pyinstaller
+      - name: Build Windows GUI and CLI
+        run: python scripts/build.py --no-kill
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NestPack-v1.1.0-windows-gui
+          path: dist/NestPack-v1.1.0-windows-gui.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NestPack-v1.1.0-windows-cli
+          path: dist/NestPack-v1.1.0-windows-cli.exe
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.10"
+      - name: Install build dependency
+        run: python -m pip install pyinstaller
+      - name: Build Linux CLI executable
+        run: python scripts/build.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NestPack-v1.1.0-linux-cli
+          path: dist/NestPack-v1.1.0-linux-cli
+          if-no-files-found: error
+
+  publish:
+    if: "startsWith(github.event.head_commit.message, 'release: NestPack 1.1.0') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')"
+    needs: [windows, linux]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          path: release-assets
+          merge-multiple: true
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ inputs.tag || 'v1.1.0' }}"
+          gh release create "$TAG" release-assets/NestPack-v1.1.0-windows-gui.exe release-assets/NestPack-v1.1.0-windows-cli.exe release-assets/NestPack-v1.1.0-linux-cli --target "$GITHUB_SHA" --title "NestPack ${TAG#v}" --notes-file .github/release-notes/v1.1.0.md
