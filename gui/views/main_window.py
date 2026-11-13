@@ -28,6 +28,7 @@ from gui.appearance.theme import APP_NAME, STYLE_SHEET, create_app_icon, load_ap
 from gui.config.naming import output_preview
 from gui.views.config_bar import ConfigBar
 from gui.views.dialogs import show_error, show_info, show_licenses
+from gui.views.extract_panel import ExtractOptionsPanel, ExtractOutputPanel
 from gui.views.layers_panel import LayersPanel
 from gui.views.output_panel import OutputPanel
 from gui.views.settings_dialog import SettingsDialog
@@ -51,6 +52,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._config_dir = Path.cwd()
         self._active_kind: str | None = None
+        self._workspace_index = 0
         self.setWindowTitle(f"{APP_NAME} · 多层嵌套压缩")
         self.setWindowIcon(create_app_icon())
         self.resize(1240, 820)
@@ -60,6 +62,8 @@ class MainWindow(QMainWindow):
         self.source = SourcePanel()
         self.layers = LayersPanel()
         self.output = OutputPanel()
+        self.extract_panel = ExtractOutputPanel()
+        self.extract_options = ExtractOptionsPanel()
         self.options = TaskOptionsPanel()
         self.settings = SettingsDialog(self)
         self.config_bar = ConfigBar()
@@ -123,9 +127,11 @@ class MainWindow(QMainWindow):
         left_layout.setContentsMargins(24, 20, 24, 20)
         left_layout.setSpacing(24)
         left_layout.addWidget(self.source)
+        self._left_layout = left_layout
+        self.extract_extras = self._extract_workspace()
+        left_layout.addWidget(self.extract_extras)
         self.workspaces = QStackedWidget()
         self.workspaces.addWidget(self._compress_workspace())
-        self.workspaces.addWidget(self._extract_workspace())
         self.workspaces.addWidget(self.unpack)
         left_layout.addWidget(self.workspaces, 1)
         content.addWidget(self._scroll(left))
@@ -162,6 +168,7 @@ class MainWindow(QMainWindow):
         self.compress_details.addWidget(self._scroll(self.output))
         details_layout.addWidget(self.compress_details, 1)
         self.outputs.addWidget(compress_details)
+        self.outputs.addWidget(self._scroll(self.extract_panel))
         self.outputs.addWidget(self._scroll(self.unpack.output_panel))
         delivery_layout.addWidget(self.outputs, 1)
         delivery_layout.addWidget(self.side)
@@ -190,13 +197,14 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
         hint = QLabel(
-            "1 级目录保持不变；其中每个 2 级目录里的压缩包都解开到输出目录下"
+            "1 级目录保持不变；其中每个 2 级目录里的压缩包都解开到「解压输出」下"
             "同名的这两层文件夹里。重名时自动追加序号，压缩包内只有一层"
             "外壳文件夹时剥掉这一层。"
         )
         hint.setObjectName("muted")
         hint.setWordWrap(True)
         layout.addWidget(hint)
+        layout.addWidget(self.extract_options)
         layout.addStretch(1)
         return page
 
@@ -218,18 +226,21 @@ class MainWindow(QMainWindow):
         self.settings.activateWindow()
 
     def workspace(self) -> str:
-        return WORKSPACE_KINDS[self.workspaces.currentIndex()]
+        return WORKSPACE_KINDS[self._workspace_index]
 
     def _switch_workspace(self, index: int) -> None:
-        self.workspaces.setCurrentIndex(index)
+        self._workspace_index = index
         workspace = self.workspace()
+        extract = workspace == "extract"
         self.source.setVisible(workspace != "unpack")
         self.source.set_mode_visible(workspace == "compress")
+        self.source.set_list_expanding(extract)
+        self.extract_extras.setVisible(extract)
+        self.workspaces.setVisible(not extract)
+        self.workspaces.setCurrentIndex(0 if workspace == "compress" else 1)
+        self._left_layout.setStretchFactor(self.source, 1 if extract else 0)
         self.detail_tab_row.setVisible(workspace == "compress")
-        self.output.set_extract_mode(workspace == "extract")
-        if workspace == "extract":
-            self._show_compress_details(1)
-        self.outputs.setCurrentIndex(1 if workspace == "unpack" else 0)
+        self.outputs.setCurrentIndex(index)
         self.side.set_workspace(workspace)
         self.update_summary()
         self.workspace_changed.emit(workspace)
@@ -240,6 +251,7 @@ class MainWindow(QMainWindow):
         self.source.set_config_directory(path.parent)
         self.layers.set_config_directory(path.parent)
         self.output.set_config_directory(path.parent)
+        self.extract_panel.set_config_directory(path.parent)
         self.unpack.set_config_directory(path.parent)
         self.settings.runtime.set_config_directory(path.parent)
 
@@ -301,6 +313,9 @@ class MainWindow(QMainWindow):
         self.layers.set_editable(compression_editable)
         self.output.setEnabled(compression_editable)
         self.options.setEnabled(compression_editable)
+        extract_editable = not active or kind != "extract"
+        self.extract_panel.setEnabled(extract_editable)
+        self.extract_options.setEnabled(extract_editable)
         self.unpack.set_editable(not active or kind in ("compress", "extract"))
         self.side.set_active(active, cancellable=kind in ("compress", "extract", "unpack"))
         if not active:
@@ -310,10 +325,13 @@ class MainWindow(QMainWindow):
         self.side.set_status(message, state)
 
     def open_output_directory(self) -> None:
-        raw = (
-            self.unpack.output_directory() if self.workspace() == "unpack"
-            else self.output.output_directory()
+        workspace = self.workspace()
+        panel = (
+            self.unpack if workspace == "unpack"
+            else self.extract_panel if workspace == "extract"
+            else self.output
         )
+        raw = panel.output_directory()
         if not raw:
             show_info(self, "尚未设置", "请先选择输出目录。")
             return

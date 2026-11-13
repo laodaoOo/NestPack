@@ -26,13 +26,12 @@ class OutputPanel(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self._config_dir = Path.cwd()
-        self._extract_mode = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
-        self.title_label = QLabel("任务输出")
-        self.title_label.setObjectName("sectionTitle")
-        layout.addWidget(self.title_label)
+        title = QLabel("任务输出")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
         self.output_name = QLabel("请选择来源并设置压缩层")
         self.output_name.setObjectName("outputName")
         self.output_name.setTextFormat(Qt.TextFormat.PlainText)
@@ -123,18 +122,6 @@ class OutputPanel(QWidget):
                 label.setWordWrap(True)
                 layout.addWidget(label)
             self.preview_paths.addWidget(box)
-            box.setVisible(not self._extract_mode)
-
-    def set_extract_mode(self, enabled: bool) -> None:
-        """解压页只保留输出目录：隐藏产物预览、伪装入口与输出选项。"""
-        self._extract_mode = enabled
-        self.title_label.setText("解压输出" if enabled else "任务输出")
-        for widget in (self.output_name, self.output_hint, self.existing_button, self.options):
-            widget.setVisible(not enabled)
-        for index in range(self.preview_paths.count()):
-            row = self.preview_paths.itemAt(index).widget()
-            if row is not None:
-                row.setVisible(not enabled)
 
     def collect(self, config: AppConfig, *, strict: bool = True) -> AppConfig:
         output = self.output_directory()

@@ -151,7 +151,20 @@ def _build_app_config(
         delete_inner_after_verify=optional_boolean(
             raw_config, "delete_inner_after_verify", "配置", True
         ),
+        # 解压页：独立输出目录与解压后清理开关，缺省时均为空/关闭。
+        extract_output_directory=_extract_output_directory(raw_config),
+        delete_source_after_extract=optional_boolean(
+            raw_config, "delete_source_after_extract", "配置", False
+        ),
     )
+
+
+def _extract_output_directory(raw_config: dict[str, Any]) -> str:
+    """解析解压页输出目录；缺省或空字符串表示尚未选择。"""
+    value = raw_config.get("extract_output_directory", "")
+    if not isinstance(value, str):
+        raise ConfigError("配置.extract_output_directory 必须是字符串")
+    return value.strip()
 
 
 def parse_config(

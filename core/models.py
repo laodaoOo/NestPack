@@ -151,6 +151,10 @@ class AppConfig:
     # 7-Zip 命令行工具路径，语义同 winrar_path（auto 表示自动检测）；
     # 只在配置里存在 7z 或 zip 层时解析。
     sevenzip_path: str = "auto"
+    # 解压页专用的输出目录，与压缩输出目录互不影响。
+    extract_output_directory: str = ""
+    # 解压后清理已经解开的源压缩包与因此变空的目录。
+    delete_source_after_extract: bool = False
 
     def effective_source_paths(self) -> list[str]:
         """返回实际生效的来源列表，兼容只填了 source_path 的旧配置。"""
@@ -171,6 +175,7 @@ class AppConfig:
             "source_paths": list(self.source_paths),
             "compress_mode": self.compress_mode,
             "output_directory": self.output_directory,
+            "extract_output_directory": self.extract_output_directory,
             "overwrite_existing": self.overwrite_existing,
             "confirm_before_start": self.confirm_before_start,
             "show_winrar_gui": self.show_winrar_gui,
@@ -187,6 +192,7 @@ class AppConfig:
             "cleanup_on_failure": self.cleanup_on_failure,
             "persist_passwords": self.persist_passwords,
             "delete_inner_after_verify": self.delete_inner_after_verify,
+            "delete_source_after_extract": self.delete_source_after_extract,
         }
 
     def without_passwords(self) -> AppConfig:

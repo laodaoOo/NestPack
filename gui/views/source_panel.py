@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidgetItem,
+    QSizePolicy,
     QWidget,
 )
 from qfluentwidgets import FluentIcon, ListWidget, PushButton, ToolButton
@@ -26,6 +27,9 @@ from gui.views.widgets import (
     ComboBox,
     SectionCard,
 )
+
+# 解除列表固定高度时使用的上限（Qt 的 QWIDGETSIZE_MAX）。
+UNLIMITED_HEIGHT = 16777215
 
 
 class SourceDropList(ListWidget):
@@ -102,6 +106,7 @@ class SourcePanel(SectionCard):
         super().__init__("来源文件", "添加文件或文件夹，也可以拖入下方列表。")
         self._config_dir = Path.cwd()
         self._default_output = ""
+        self._expanding = False
         self._build_list()
         self._build_buttons()
         self._build_mode_row()
@@ -123,13 +128,32 @@ class SourcePanel(SectionCard):
         )
 
     def _fit_list_height(self) -> None:
-        """始终显示至少三行来源，更多来源在列表内滚动。"""
+        """压缩页固定为至少三行；解压页只保证下限，由布局拉高。"""
+        height = self._list_height()
+        if self._expanding:
+            self.source_list.setMinimumHeight(height)
+            return
+        self.source_list.setFixedHeight(height)
+        self.source_list.viewport().update()
+
+    def _list_height(self) -> int:
+        """来源列表按三行计算的最小高度。"""
         row_height = 36
         for index in range(min(3, self.source_list.count())):
             row_height = max(row_height, self.source_list.item(index).sizeHint().height())
-        height = 3 * (row_height + 2 * self.source_list.spacing()) + 12
-        self.source_list.setFixedHeight(height)
-        self.source_list.viewport().update()
+        return 3 * (row_height + 2 * self.source_list.spacing()) + 12
+
+    def set_list_expanding(self, expanding: bool) -> None:
+        """解压页把拖放区铺满可用高度，其余页面保持三行。"""
+        self._expanding = expanding
+        policy = self.source_list.sizePolicy()
+        policy.setVerticalPolicy(
+            QSizePolicy.Policy.Expanding if expanding else QSizePolicy.Policy.Fixed
+        )
+        self.source_list.setSizePolicy(policy)
+        if expanding:
+            self.source_list.setMaximumHeight(UNLIMITED_HEIGHT)
+        self._fit_list_height()
 
     def _build_buttons(self) -> None:
         """添加与清空按钮由本面板处理，完成后发布来源变化。"""

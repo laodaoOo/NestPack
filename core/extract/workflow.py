@@ -2,7 +2,8 @@
 
 规则：1 级目录名与 2 级目录名保持不变；每个压缩包解开后放进对应的
 2 级目录，压缩包内若只有一层外壳文件夹则剥掉这一层；与已有内容重名
-时按系统习惯追加序号，并记录重命名供界面提示。
+时按系统习惯追加序号，并记录重命名供界面提示。开启清理时，一个
+2 级目录的压缩包全部解开后才删除其中的源压缩包，目录清空后移除。
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import shutil
 import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from itertools import groupby
 from pathlib import Path
 
 from core.backends import detect_archive_format, get_backend
@@ -23,11 +25,12 @@ from platforms import get_archive_platform
 
 @dataclass(frozen=True)
 class ExtractJob:
-    """一个待解压的压缩包及其落盘目录。"""
+    """一个待解压的压缩包、它所在的 2 级目录与落盘目录。"""
 
     archive: Path
     target: Path
     archive_format: str
+    folder: Path
 
 
 @dataclass
@@ -37,6 +40,7 @@ class ExtractOutcome:
     output: Path
     archives: int = 0
     entries: int = 0
+    removed: int = 0
     renames: list[tuple[str, str]] = field(default_factory=list)
     failures: list[tuple[str, str]] = field(default_factory=list)
 
@@ -63,7 +67,7 @@ def scan_jobs(sources: Sequence[Path], output_dir: Path) -> list[ExtractJob]:
                 if _is_later_volume(item.name, archive_format):
                     continue
                 target = output_dir / source.name / directory.name
-                jobs.append(ExtractJob(item, target, archive_format))
+                jobs.append(ExtractJob(item, target, archive_format, directory))
     return jobs
 
 
@@ -79,30 +83,43 @@ def extract_archives(
     *,
     rar_tool: Path | None = None,
     sevenzip_tool: Path | None = None,
+    delete_source: bool = False,
     cancel_event: threading.Event | None = None,
     output_cb: Callable[[str], None] | None = None,
     progress_cb: Callable[[int, int, str], None] | None = None,
 ) -> ExtractOutcome:
-    """逐个解开压缩包；单个压缩包失败只记录，不中断其余任务。
+    """按 1 级目录顺序逐个解开压缩包；单个压缩包失败只记录并继续。
 
     rar_tool / sevenzip_tool 都是尽力提供（可以为 None），只在解到对应
-    格式的压缩包而工具缺失时才记为该压缩包失败。
+    格式的压缩包而工具缺失时才记为该压缩包失败。delete_source 打开时，
+    一个 2 级目录的压缩包全部解开后才删除源压缩包，目录清空后移除。
     """
     cancellation = Cancellation(cancel_event)
     outcome = ExtractOutcome(output=output_dir)
     total = len(jobs)
+    done = 0
     with unpack_workspace(output_dir, cancellation, output_cb) as work:
-        for index, job in enumerate(jobs, start=1):
-            cancellation.check()
-            if progress_cb is not None:
-                progress_cb(index - 1, total, f"正在解压：{job.archive.name}")
-            if _extract_job(
-                job, work / f"item_{index}", cancellation, output_cb,
-                rar_tool, sevenzip_tool, outcome,
-            ):
-                outcome.archives += 1
-            if progress_cb is not None:
-                progress_cb(index, total, f"已完成：{job.archive.name}")
+        for source, source_jobs in groupby(jobs, key=lambda job: job.folder.parent):
+            for folder, group in groupby(source_jobs, key=lambda job: job.folder):
+                folder_jobs = list(group)
+                extracted: list[ExtractJob] = []
+                for job in folder_jobs:
+                    cancellation.check()
+                    done += 1
+                    if progress_cb is not None:
+                        progress_cb(done - 1, total, f"正在解压：{job.archive.name}")
+                    if _extract_job(
+                        job, work / f"item_{done}", cancellation, output_cb,
+                        rar_tool, sevenzip_tool, outcome,
+                    ):
+                        outcome.archives += 1
+                        extracted.append(job)
+                    if progress_cb is not None:
+                        progress_cb(done, total, f"已完成：{job.archive.name}")
+                if delete_source and len(extracted) == len(folder_jobs):
+                    _remove_extracted(folder, extracted, outcome, output_cb)
+            if delete_source:
+                _remove_empty_directory(source, output_cb)
     return outcome
 
 
@@ -198,3 +215,35 @@ def _sorted_children(directory: Path) -> list[Path]:
 def _relative(path: Path, root: Path) -> str:
     """重命名记录用相对输出目录的路径展示。"""
     return str(path.relative_to(root))
+
+
+def _remove_extracted(
+    folder: Path,
+    jobs: Sequence[ExtractJob],
+    outcome: ExtractOutcome,
+    output_cb: Callable[[str], None] | None,
+) -> None:
+    """删除已解开的源压缩包，并移除因此变空的 2 级目录。"""
+    for job in jobs:
+        try:
+            job.archive.unlink()
+        except OSError as error:
+            _log(output_cb, f"[未删除] {job.archive}：{error}")
+            continue
+        outcome.removed += 1
+    _remove_empty_directory(folder, output_cb)
+
+
+def _remove_empty_directory(path: Path, output_cb: Callable[[str], None] | None) -> None:
+    """目录清空后删除；还有未处理的内容时保留。"""
+    try:
+        path.rmdir()
+    except OSError:
+        return
+    _log(output_cb, f"已删除空目录：{path}")
+
+
+def _log(output_cb: Callable[[str], None] | None, message: str) -> None:
+    """把清理结果写进任务日志。"""
+    if output_cb is not None:
+        output_cb(message)

@@ -68,7 +68,7 @@ GUI/CLI + Linux CLI，共用 `core/` 引擎，版本 1.1.0）。智能体会话�
 | CLI 参数配置 / 压缩预览与执行 | `cli/configuration.py` / `cli/compress_cmd.py` |
 | GUI 应用接线 / 任务互斥 / 关闭协调 | `gui/main.py` |
 | 主窗口布局 / 来源与层名联动 | `gui/views/main_window.py` |
-| 解压页与右侧输出精简 / 导航三页切换 | `gui/views/main_window.py`、`output_panel.py`、`source_panel.py` |
+| 解压页 / 独立解压输出 / 三页导航与拖放区高度 | `gui/views/main_window.py`、`extract_panel.py`、`source_panel.py` |
 | GUI 配置会话 / 自动保存 / 字段绑定 | `gui/config/session.py`、`gui/config/binding.py` |
 | GUI 默认层与来源独立层草稿 | `gui/config/layers.py` |
 | GUI 最近配置与目录 / 默认模板 / 随机密码 | `gui/config/storage.py`、`gui/config/passwords.py` |

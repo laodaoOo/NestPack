@@ -51,6 +51,7 @@ class GuiApplication(QObject):
         self.window = MainWindow()
         self.config = ConfigSession(self, ConfigBinding(
             self.window.source, self.window.layers, self.window.output,
+            self.window.extract_panel, self.window.extract_options,
             self.window.options, self.window.settings, self.window.config_bar,
         ))
         self.compression = CompressionTask(self)
@@ -258,15 +259,16 @@ class GuiApplication(QObject):
         if not sources:
             show_error(self.window, "无法开始解压", "请添加一个或多个 1 级目录文件夹。")
             return
-        raw_output = self.window.output.output_directory()
+        raw_output = self.window.extract_panel.output_directory()
         if not raw_output:
-            show_error(self.window, "无法开始解压", "请先选择输出目录。")
+            show_error(self.window, "无法开始解压", "请先选择解压输出目录。")
             return
         output = normalize_user_path(raw_output, self.config.path.parent)
         winrar, sevenzip = self.window.settings.runtime.tool_paths()
         try:
             jobs = self.extract.start(
                 sources, output,
+                delete_source=self.window.extract_options.delete_source_enabled(),
                 winrar_configured=winrar, sevenzip_configured=sevenzip,
                 config_dir=self.config.path.parent,
             )

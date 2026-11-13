@@ -22,6 +22,7 @@ class ExtractWorker(TaskWorker):
         sevenzip_tool: Path | None,
         jobs: list[ExtractJob],
         output_dir: Path,
+        delete_source: bool,
         cancel_event: threading.Event,
     ) -> None:
         super().__init__("解压失败")
@@ -29,6 +30,7 @@ class ExtractWorker(TaskWorker):
         self._sevenzip_tool = sevenzip_tool
         self._jobs = list(jobs)
         self._output_dir = output_dir
+        self._delete_source = delete_source
         self._cancel_event = cancel_event
 
     def execute(self) -> ExtractOutcome:
@@ -41,11 +43,14 @@ class ExtractWorker(TaskWorker):
             if self._sevenzip_tool else "7-Zip：未检测到（遇到 7z / zip 压缩包时无法解）"
         )
         self.log.emit(f"解压输出目录：{self._output_dir}")
+        if self._delete_source:
+            self.log.emit("解压后删除源文件：已开启（每个 2 级目录解开后清理）")
         outcome = extract_archives(
             self._jobs,
             self._output_dir,
             rar_tool=self._rar_tool,
             sevenzip_tool=self._sevenzip_tool,
+            delete_source=self._delete_source,
             cancel_event=self._cancel_event,
             output_cb=self.log.emit,
             progress_cb=self._progress,
@@ -53,6 +58,8 @@ class ExtractWorker(TaskWorker):
         self.log.emit(
             f"解压完成：{outcome.archives} 个压缩包，写入 {outcome.entries} 个条目。"
         )
+        if outcome.removed:
+            self.log.emit(f"已删除 {outcome.removed} 个源压缩包。")
         for name, reason in outcome.failures:
             self.log.emit(f"[未解开] {name}：{reason}")
         return outcome
@@ -74,6 +81,7 @@ class ExtractTask(BackgroundTask):
         sources: list[Path],
         output_dir: Path,
         *,
+        delete_source: bool,
         winrar_configured: str,
         sevenzip_configured: str,
         config_dir: Path,
@@ -88,7 +96,7 @@ class ExtractTask(BackgroundTask):
             raise ValueError("所选文件夹里没有找到可解压的压缩包。")
         self._cancel_event = threading.Event()
         self._start(ExtractWorker(
-            rar_tool, sevenzip_tool, jobs, output_dir, self._cancel_event,
+            rar_tool, sevenzip_tool, jobs, output_dir, delete_source, self._cancel_event,
         ))
         return jobs
 

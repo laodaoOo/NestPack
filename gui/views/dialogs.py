@@ -199,6 +199,8 @@ __all__ = ["SuccessBox", "ask_yes_no", "show_error", "show_extract_result", "sho
 def show_extract_result(parent: QWidget, result: ExtractOutcome) -> None:
     """展示解压摘要；有重命名或未解开项时逐条列出，并可跳转到输出目录。"""
     lines = [f"已解开 {result.archives} 个压缩包，写入 {result.entries} 个条目。"]
+    if result.removed:
+        lines.append(f"已删除 {result.removed} 个源压缩包。")
     if result.renames:
         lines.append(f"{len(result.renames)} 个条目与已有内容重名，已自动追加序号：")
         lines.extend(f"{old}  →  {new}" for old, new in result.renames)
