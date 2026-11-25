@@ -4,19 +4,33 @@
 
 <h1 align="center">NestPack</h1>
 
-**一次设置，完成多层压缩；选择最外层文件，逐层解包。**
+**RAR、7z、ZIP 多层嵌套压缩与自动逐层解包**
 
 ![Windows](https://img.shields.io/badge/Windows-GUI%20%2B%20CLI-0078D4?logo=windows&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-CLI-FCC624?logo=linux&logoColor=black)
 [![License](https://img.shields.io/badge/license-GPL--3.0--only-2F9E44)](LICENSE)
 
-NestPack 可以把文件或文件夹连续压缩多次，每一层分别选择 RAR、7z 或 ZIP，也可以分别设置密码。适合需要多层打包、批量处理多个文件夹，或拆分大文件后再分享的场景。
+NestPack 将文件或文件夹打包成多层压缩包。每层可独立选择 RAR、7z 或 ZIP，也可设置各自的文件名、密码和分卷大小。解包时选择最外层归档，NestPack 会按内容识别格式并逐层解开。支持 Windows 图形界面和命令行，以及 Linux 命令行。
+
+NestPack creates and automatically extracts nested RAR, 7z, and ZIP archives. It supports per-layer passwords, split archives, batch compression, embedding archives in MP4 videos, and RAR self-extracting archives (SFX).
 
 **[下载程序](https://github.com/codeTianZun/NestPack/releases) · [图文入门](docs/入门教程.md) · [常见问题](docs/常见问题.md) · [GitHub 下载与反馈指南](docs/GitHub下载与反馈.md)**
 
 > **版本说明**：本页介绍 **v1.1.0** 的界面与功能。下载程序前请核对发布说明；当前源码的运行与构建方法见[打包说明](打包说明.md)。
 
-## 界面与用途
+## 主要功能
+
+| 功能 | 可以做什么 |
+|---|---|
+| **混合格式嵌套与加密** | 从内到外逐层设置格式、名称和密码，例如用 ZIP 包裹加密的 7z，再套一层 RAR。 |
+| **一键解包** | 从最外层归档或首卷开始，自动识别 RAR、7z、ZIP 和分卷套，支持扩展名已改成 `.bin` 等情况。可提供多个候选密码，无需按层排序。 |
+| **批量压缩** | 将多个文件或文件夹合并打包，或让每个来源生成独立的一套压缩包。分别打包时可为各来源设置不同的层数、格式和密码。 |
+| **分卷压缩** | 每层可独立设置分卷大小。需要拆分最终交付文件时，在最外层设置分卷。 |
+| **MP4 视频融合** | 将单文件 RAR、7z 或 ZIP 归档与 MP4 合成可播放的视频，也可从成品中提取原归档。 |
+| **RAR 自解压（SFX）** | 生成 Windows `.exe` 或 Linux `.sfx` 自解压文件。 |
+| **命令行自动化** | GUI 与 CLI 共用 JSON 任务配置。CLI 支持直接传参、预览压缩计划和输出 JSON 结果，便于脚本调用。 |
+
+## 压缩界面与示例
 
 ![NestPack 压缩界面：左侧选择来源和压缩层，右侧编辑当前层](docs/images/quickstart-layers.png)
 
@@ -27,15 +41,6 @@ NestPack 可以把文件或文件夹连续压缩多次，每一层分别选择 R
 ```
 
 分享时发送最外层的 `资料_2.zip`，并向接收者提供内层密码。接收者在 NestPack 中选择这个 ZIP，程序会逐层解开，恢复原始文件。
-
-| 需要完成的事情 | NestPack 的操作方式 |
-|---|---|
-| 连续打包多层 | 按从内到外的顺序添加压缩层，每层选择格式、名称和密码 |
-| 多个文件夹各自打包 | 添加多个来源，选择「分别打包」 |
-| 大文件拆成几份 | 在最外层设置分卷大小，分享时发送全部分卷 |
-| 把压缩包与视频融合 | 为某层选择 MP4 载体，生成可播放、可解包的 MP4 |
-| 制作可双击解压的文件 | 为 RAR 层启用 Windows 自解压，生成 EXE |
-| 解开多层压缩包 | 选择最外层文件，填写需要的密码，点击「开始解包」 |
 
 ## 下载与准备
 
