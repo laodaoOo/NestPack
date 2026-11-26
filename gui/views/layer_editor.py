@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QRegularExpression, Qt, Signal
+from PySide6.QtGui import QRegularExpressionValidator
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -26,6 +27,12 @@ from core.filesystem import normalize_user_path
 from core.models import FORMAT_7Z, FORMAT_RAR, FORMAT_ZIP, LayerConfig
 from gui.appearance.theme import SPACE_SM, SPACE_XS
 from gui.config.passwords import generate_password
+from gui.config.volume import (
+    DEFAULT_VOLUME_UNIT,
+    VOLUME_UNIT_OPTIONS,
+    join_volume_size,
+    split_volume_size,
+)
 from gui.views.disguise_panel import DisguisePanel
 from gui.views.layer_names import LayerNames
 from gui.views.sfx_dialog import SfxSettingsDialog
@@ -129,8 +136,31 @@ class LayerEditor(QWidget):
         self.level_combo.setToolTip("智能自动：第一层采样选择级别，之后的层只存储。")
         level_layout.addWidget(self.level_combo)
         advanced.addWidget(level_box, 1)
-        volume_box, self.volume_edit, _ = text_field("分卷大小", layer.volume_size or "")
-        self.volume_edit.setPlaceholderText("如 500m，留空不分卷")
+        volume_box = QWidget()
+        volume_layout = QVBoxLayout(volume_box)
+        volume_layout.setContentsMargins(0, 0, 0, 0)
+        volume_layout.setSpacing(SPACE_XS)
+        volume_label = QLabel("分卷大小")
+        volume_label.setObjectName("fieldLabel")
+        volume_layout.addWidget(volume_label)
+        volume_line = QHBoxLayout()
+        volume_line.setContentsMargins(0, 0, 0, 0)
+        volume_line.setSpacing(SPACE_XS)
+        volume_number, volume_unit = split_volume_size(layer.volume_size)
+        self.volume_edit = LineEdit()
+        self.volume_edit.setText(volume_number)
+        self.volume_edit.setPlaceholderText("留空不分卷")
+        self.volume_edit.setValidator(
+            QRegularExpressionValidator(QRegularExpression(r"\d{0,9}(\.\d{0,2})?"), self)
+        )
+        volume_line.addWidget(self.volume_edit, 1)
+        self.volume_unit = ComboBox()
+        for text, value in VOLUME_UNIT_OPTIONS:
+            self.volume_unit.addItem(text, userData=value)
+        self.volume_unit.setCurrentIndex(self.volume_unit.findData(volume_unit))
+        self.volume_unit.setFixedWidth(76)
+        volume_line.addWidget(self.volume_unit)
+        volume_layout.addLayout(volume_line)
         advanced.addWidget(volume_box, 1)
         recovery_box = QWidget()
         recovery_layout = QHBoxLayout(recovery_box)
@@ -167,6 +197,7 @@ class LayerEditor(QWidget):
         self.password_edit.textEdited.connect(self._password_edited)
         self.password_edit.textChanged.connect(self.changed)
         self.volume_edit.textChanged.connect(self.changed)
+        self.volume_unit.currentIndexChanged.connect(self.changed)
         self.level_combo.currentIndexChanged.connect(self.changed)
         self.format_combo.currentIndexChanged.connect(self._on_format_changed)
         self.changed.connect(self._refresh_details)
@@ -174,16 +205,25 @@ class LayerEditor(QWidget):
         self._sync_sfx()
         self._refresh_details()
 
+    def _volume_text(self) -> str:
+        """当前分卷写法；输入框留空表示不分卷。"""
+        unit = self.volume_unit.currentData()
+        return join_volume_size(
+            self.volume_edit.text(),
+            unit if isinstance(unit, str) else DEFAULT_VOLUME_UNIT,
+        ) or ""
+
     def _refresh_details(self) -> None:
+        volume_number = self.volume_edit.text().strip()
         parts = [self.level_combo.currentText()]
-        if self.volume_edit.text().strip():
-            parts.append("分卷 " + self.volume_edit.text().strip())
+        if volume_number:
+            parts.append(f"分卷 {volume_number} {self.volume_unit.currentText()}")
         if self.recovery_check.isChecked():
             parts.append(f"恢复记录 {self.recovery_spin.value()}%")
         if self.sfx_settings.enabled:
             parts.append(f"{self.sfx_settings.target.title()} 自解压")
         self.details.set_summary("，".join(parts))
-        self.disguise.set_archive_options(self.volume_edit.text().strip(), self.sfx_settings)
+        self.disguise.set_archive_options(self._volume_text(), self.sfx_settings)
 
     def current_format(self) -> str:
         """当前选择的压缩格式（"rar" / "7z" / "zip"）。"""
@@ -290,7 +330,7 @@ class LayerEditor(QWidget):
             format=archive_format,
             compression_level=self.level_combo.currentData(),
             auto_name=self.names.auto_name,
-            volume_size=self.volume_edit.text().strip() or None,
+            volume_size=self._volume_text() or None,
             password_set=self.password_set_hint or bool(password),
             sfx=self.sfx_settings,
             disguise=self.disguise.collect(),
